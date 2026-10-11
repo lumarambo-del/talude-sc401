@@ -209,7 +209,11 @@
   if (scene.moon) scene.moon.show = false;
   scene.highDynamicRange = false;
   scene.postProcessStages.fxaa.enabled = true;
-  if (COM_MAPA) { scene.globe.depthTestAgainstTerrain = true; scene.globe.showGroundAtmosphere = false; }
+  if (COM_MAPA) {
+    scene.globe.depthTestAgainstTerrain = true; scene.globe.showGroundAtmosphere = false;
+    // o mapa vai ficando mais nítido sozinho, sem precisar mexer na tela
+    scene.globe.tileLoadProgressEvent.addEventListener(() => scene.requestRender());
+  }
 
   // Movimento mais calmo (menos "embalo" depois de soltar o mouse)
   const ctl = scene.screenSpaceCameraController;
