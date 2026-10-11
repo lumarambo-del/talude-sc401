@@ -43,7 +43,6 @@
   .cesium-viewer, .cesium-viewer-cesiumWidgetContainer, .cesium-widget { width: 100%; height: 100%; position: relative; }
   .cesium-widget canvas { width: 100%; height: 100%; display: block; touch-action: none; }
   .cesium-viewer-bottom { left: auto !important; right: 8px; bottom: 4px !important; max-width: 60%; }
-  .cesium-credit-logoContainer { display: none !important; }
 
   .camada { position: fixed; inset: 0; pointer-events: none; display: flex; flex-direction: column;
     justify-content: space-between; gap: 12px;
@@ -186,18 +185,29 @@
   const tok = getComputedStyle(document.documentElement);
   const cor = (v) => C.Color.fromCssColorString(tok.getPropertyValue(v).trim() || '#888');
 
+  // Chave do Cesium ion (só funciona em https://lumarambo-del.github.io e só lê dados públicos)
+  C.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IkYzcU1iNHk4RUc2Yl9WOFgiLCJqdGkiOiJmMDE3MzRlMC1mYmM4LTQ5YWItYmYxNS00Y2E2ZjA3NmU0YjkiLCJpZCI6NDYyMjk1LCJzdWIiOiJMdW1hIFJhbWJvIiwiaXNzIjoiaHR0cHM6Ly9hcGkuY2VzaXVtLmNvbSIsImF1ZCI6InNpdGUgdGFsdWRlIFNDLTQwMSIsImlhdCI6MTc5MTY4ODkxN30._swxEZY9cfFl7cTUjfHyK-jQ6Hmb8giT96M5L-vprTk';
+
+  // Mapa de reserva, sem conta, caso o Cesium ion não responda
+  const reserva = () => new C.ImageryLayer(new C.UrlTemplateImageryProvider({
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    maximumLevel: 19, credit: new C.Credit('Imagem de satélite: Esri, Maxar, Earthstar Geographics') }));
+  let viewer;
+  const comReserva = (camada) => {
+    camada.errorEvent.addEventListener(() => {
+      if (!viewer) return;
+      viewer.imageryLayers.remove(camada); viewer.imageryLayers.add(reserva()); viewer.scene.requestRender();
+    });
+    return camada;
+  };
   const camadasDeMapa = {
-    satelite: () => new C.UrlTemplateImageryProvider({
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      maximumLevel: 19, credit: new C.Credit('Imagem de satélite: Esri, Maxar, Earthstar Geographics') }),
-    ruas: () => new C.UrlTemplateImageryProvider({
-      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maximumLevel: 19,
-      credit: new C.Credit('© colaboradores do OpenStreetMap') })
+    satelite: () => comReserva(C.ImageryLayer.fromWorldImagery({ style: C.IonWorldImageryStyle.AERIAL })),
+    ruas: () => comReserva(C.ImageryLayer.fromWorldImagery({ style: C.IonWorldImageryStyle.ROAD }))
   };
 
-  const viewer = new C.Viewer('vista', {
+  viewer = new C.Viewer('vista', {
     globe: COM_MAPA ? undefined : false,
-    baseLayer: COM_MAPA ? new C.ImageryLayer(camadasDeMapa.satelite()) : false,
+    baseLayer: COM_MAPA ? camadasDeMapa.satelite() : false,
     skyBox: COM_MAPA ? undefined : false, skyAtmosphere: COM_MAPA ? undefined : false,
     baseLayerPicker: false, geocoder: false, homeButton: false, sceneModePicker: false,
     navigationHelpButton: false, animation: false, timeline: false, fullscreenButton: false,
@@ -358,7 +368,7 @@
       const camadas = viewer.imageryLayers; camadas.removeAll();
       const tipo = bt.dataset.mapa;
       scene.globe.show = tipo !== 'nenhum';
-      if (tipo !== 'nenhum') camadas.addImageryProvider(camadasDeMapa[tipo]());
+      if (tipo !== 'nenhum') camadas.add(camadasDeMapa[tipo]());
       scene.requestRender();
     });
   }
