@@ -112,7 +112,7 @@
       <div class="extra">
         <p>Modelo obtido por fotogrametria com drone, a partir de fotografias de maio de 2026.</p>
         <p class="autoria">Trabalho de Conclusão de Curso em Geologia (UFSC)<br>Luma Rambo · <a href="mailto:lumarambo@gmail.com">lumarambo@gmail.com</a></p>
-        <p>Arraste com o botão esquerdo para girar, com o botão direito para mover e use a roda do mouse (ou dois dedos) para aproximar. Clique duas vezes num ponto do talude para girar em volta dele. As barras embaixo percorrem o talude com precisão.</p>
+        <p>Arraste com o botão esquerdo para girar e com a rodinha (ou o botão direito) apertada para mover. Gire a rodinha (ou use dois dedos) para aproximar. Clique duas vezes num ponto do talude para girar em volta dele. As barras embaixo percorrem o talude com precisão.</p>
       </div>
     </header>
     <div class="painel bussola" title="Norte">
@@ -289,12 +289,19 @@
   bAltura.addEventListener('input', () => { lerCamera(); est.z = zMin + (bAltura.value / 100) * (zMax - zMin); mirar(); });
 
   // Botão direito do mouse: arrasta o ponto de vista livremente (as barras acompanham)
+  // A rodinha (botão do meio) e o botão direito fazem a mesma coisa: mover.
   ctl.zoomEventTypes = [C.CameraEventType.WHEEL, C.CameraEventType.PINCH];
+  ctl.tiltEventTypes = [{ eventType: C.CameraEventType.LEFT_DRAG, modifier: C.KeyboardEventModifier.CTRL }];
   scene.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  scene.canvas.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
   const mouse = new C.ScreenSpaceEventHandler(scene.canvas);
   let arrasto = null;
-  mouse.setInputAction((e) => { lerCamera(); arrasto = C.Cartesian2.clone(e.position); }, C.ScreenSpaceEventType.RIGHT_DOWN);
-  mouse.setInputAction(() => { arrasto = null; }, C.ScreenSpaceEventType.RIGHT_UP);
+  const comecar = (e) => { lerCamera(); arrasto = C.Cartesian2.clone(e.position); };
+  const parar = () => { arrasto = null; };
+  mouse.setInputAction(comecar, C.ScreenSpaceEventType.RIGHT_DOWN);
+  mouse.setInputAction(parar, C.ScreenSpaceEventType.RIGHT_UP);
+  mouse.setInputAction(comecar, C.ScreenSpaceEventType.MIDDLE_DOWN);
+  mouse.setInputAction(parar, C.ScreenSpaceEventType.MIDDLE_UP);
   mouse.setInputAction((mov) => {
     if (!arrasto) return;
     const dx = mov.endPosition.x - arrasto.x, dy = mov.endPosition.y - arrasto.y;
