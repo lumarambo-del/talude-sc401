@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Talude rodoviário da SC-401</title>
-<meta name="description" content="Modelo 3D do talude rodoviário da SC-401 (km 17+780 a 17+960, Florianópolis/SC), obtido por fotogrametria com drone. TCC em Geologia (UFSC) de Luma Rambo.">
+<title>Modelos Virtuais de Afloramento · SC-401</title>
+<meta name="description" content="Modelos Virtuais de Afloramento (MVA) do talude rodoviário da SC-401 (km 17+780 a 17+960, Florianópolis/SC), obtidos por fotogrametria. TCC em Geologia (UFSC) de Luma Rambo.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.112.0/Build/Cesium/Widgets/widgets.css">
@@ -61,6 +61,10 @@
   .info .extra p { margin: 0; }
   .info .autoria { color: var(--texto); }
   .info a { color: var(--acento); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  .seletor { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 12px; padding: 3px;
+    border: 1px solid var(--linha); border-radius: 9px; }
+  .seletor button { font: 500 .85rem var(--dados); letter-spacing: .06em; padding: 7px 10px; text-align: center; }
+  .info .nota { margin: 8px 0 0; font-size: .83rem; line-height: 1.45; color: var(--texto-2); min-height: 2.4em; }
   .info details summary { cursor: pointer; font-size: .8rem; color: var(--texto-2); margin-top: 10px; }
   .info details[open] summary { margin-bottom: 6px; }
 
@@ -101,15 +105,19 @@
 </style>
 </head>
 <body>
-<div id="vista" aria-label="Modelo 3D do talude"></div>
+<div id="vista" aria-label="Modelo virtual de afloramento do talude"></div>
 
 <div class="camada">
   <div class="topo">
     <header class="painel info">
-      <h1>Talude rodoviário da SC-401</h1>
-      <p class="local">Modelo 3D · km 17+780 a 17+960 · Florianópolis (SC)</p>
+      <h1>Modelos Virtuais de Afloramento</h1>
+      <p class="local">Talude rodoviário da SC-401 · km 17+780 a 17+960 · Florianópolis (SC)</p>
+      <div class="seletor" id="seletor" role="group" aria-label="Escolha o modelo">
+        <button type="button" data-mva="mva1" aria-pressed="true">MVA 1</button>
+        <button type="button" data-mva="mva2" aria-pressed="false">MVA 2</button>
+      </div>
+      <p class="nota" id="nota">Levantamento aéreo com drone.</p>
       <div class="extra">
-        <p>Modelo obtido por fotogrametria com drone, a partir de fotografias de maio de 2026.</p>
         <p class="autoria">Trabalho de Conclusão de Curso em Geologia (UFSC)<br>Luma Rambo · <a href="mailto:lumarambo@gmail.com">lumarambo@gmail.com</a></p>
         <p>Arraste com o botão esquerdo para girar e com a rodinha (ou o botão direito) apertada para mover. Gire a rodinha (ou use dois dedos) para aproximar. Clique duas vezes num ponto do talude para girar em volta dele. As barras embaixo percorrem o talude com precisão.</p>
       </div>
@@ -230,41 +238,63 @@
   ctl.inertiaSpin = 0.4; ctl.inertiaTranslate = 0.4; ctl.inertiaZoom = 0.4;
   ctl.minimumZoomDistance = 1.5; ctl.maximumZoomDistance = 3000;
 
-  let json, tileset;
-  try {
-    json = await (await fetch('tileset.json')).json();
-    tileset = await C.Cesium3DTileset.fromUrl('tileset.json', { maximumScreenSpaceError: 4 });
-  } catch (e) { falha('Não foi possível abrir os arquivos do modelo (tileset.json).'); return; }
-
-  // Sem relevo no mapa, o chão do mapa fica na altitude zero: descemos o modelo até o pé do talude tocar o mapa.
-  const T0 = C.Matrix4.fromArray(json.root.transform);
-  const origemLocal = C.Matrix4.getTranslation(T0, new C.Cartesian3());
-  if (COM_MAPA) {
-    const base = (json.properties && json.properties.Height && json.properties.Height.minimum) || 0;
-    const normal = C.Ellipsoid.WGS84.geodeticSurfaceNormal(origemLocal, new C.Cartesian3());
-    tileset.modelMatrix = C.Matrix4.fromTranslation(C.Cartesian3.multiplyByScalar(normal, -(base - 0.2), new C.Cartesian3()));
-  }
-  scene.primitives.add(tileset);
-  const M = C.Matrix4.multiply(tileset.modelMatrix, T0, new C.Matrix4());
+  // Modelos disponíveis. Para acrescentar outro, crie uma pasta (mva3/...) e adicione uma linha aqui
+  // e um botão no seletor do cabeçalho.
+  const MODELOS = {
+    mva1: { url: 'tileset.json', nota: 'Levantamento aéreo com drone.' },
+    mva2: { url: 'mva2/tileset.json', nota: 'Levantamento aéreo com drone integrado a fotografias terrestres de celular.' }
+  };
+  const azDireita = C.Math.toRadians(OLHAR_DE_FRENTE + 90);        // à direita de quem olha a face (SSW)
+  const u = [Math.sin(azDireita), Math.cos(azDireita), 0];          // eixo ao longo do talude
+  const n = [-u[1], u[0], 0];                                       // horizontal, perpendicular ao talude
+  let tileset = null, M, Minv, centro, meioComprimento, zMin, zMax, comprimento;
   const paraMundo = (x, y, z) => C.Matrix4.multiplyByPoint(M, new C.Cartesian3(x, y, z), new C.Cartesian3());
 
-  // Caixa do modelo no sistema local (leste, norte, cima) e eixo ao longo do talude
-  const b = json.root.content.boundingVolume.box;
-  const centro = [b[0], b[1], b[2]], eixos = [[b[3], b[4], b[5]], [b[6], b[7], b[8]], [b[9], b[10], b[11]]];
-  const azDireita = C.Math.toRadians(OLHAR_DE_FRENTE + 90);        // à direita de quem olha a face (SSW)
-  const u = [Math.sin(azDireita), Math.cos(azDireita), 0];
-  const meioComprimento = eixos.reduce((s, a) => s + Math.abs(a[0] * u[0] + a[1] * u[1]), 0);
-  const meiaAltura = eixos.reduce((s, a) => s + Math.abs(a[2]), 0);
-  const zMin = centro[2] - meiaAltura, zMax = centro[2] + meiaAltura;
-  const comprimento = 2 * meioComprimento;
+  async function carregar(id) {
+    const cfg = MODELOS[id];
+    estado.classList.remove('erro'); estado.textContent = 'Carregando o modelo…';
+    let json, novo;
+    try {
+      json = await (await fetch(cfg.url)).json();
+      novo = await C.Cesium3DTileset.fromUrl(cfg.url, { maximumScreenSpaceError: 4 });
+    } catch (e) { falha('Não foi possível abrir os arquivos do modelo (' + cfg.url + ').'); return false; }
+
+    // Sem relevo no mapa, o chão do mapa fica na altitude zero: descemos o modelo até o pé do talude tocar o mapa.
+    const T0 = C.Matrix4.fromArray(json.root.transform);
+    if (COM_MAPA) {
+      const base = (json.properties && json.properties.Height && json.properties.Height.minimum) || 0;
+      const origem = C.Matrix4.getTranslation(T0, new C.Cartesian3());
+      const normal = C.Ellipsoid.WGS84.geodeticSurfaceNormal(origem, new C.Cartesian3());
+      novo.modelMatrix = C.Matrix4.fromTranslation(C.Cartesian3.multiplyByScalar(normal, -(base - 0.2), new C.Cartesian3()));
+    }
+    if (tileset) scene.primitives.remove(tileset);
+    tileset = novo;
+    scene.primitives.add(tileset);
+    M = C.Matrix4.multiply(tileset.modelMatrix, T0, new C.Matrix4());
+    Minv = C.Matrix4.inverseTransformation(M, new C.Matrix4());
+
+    // Caixa do modelo no sistema local (leste, norte, cima)
+    const b = json.root.content.boundingVolume.box;
+    centro = [b[0], b[1], b[2]];
+    const eixos = [[b[3], b[4], b[5]], [b[6], b[7], b[8]], [b[9], b[10], b[11]]];
+    meioComprimento = eixos.reduce((s, a) => s + Math.abs(a[0] * u[0] + a[1] * u[1]), 0);
+    const meiaAltura = eixos.reduce((s, a) => s + Math.abs(a[2]), 0);
+    zMin = centro[2] - meiaAltura; zMax = centro[2] + meiaAltura;
+    comprimento = 2 * meioComprimento;
+
+    tileset.loadProgress.addEventListener((pend, proc) => { if (pend + proc > 0) estado.textContent = 'Carregando detalhes…'; });
+    tileset.allTilesLoaded.addEventListener(() => { estado.textContent = 'Visualizador: CesiumJS'; });
+    document.getElementById('nota').textContent = cfg.nota;
+    return true;
+  }
+  let atual = location.hash === '#mva2' ? 'mva2' : 'mva1';
+  if (!(await carregar(atual))) return;
 
   const bLateral = document.getElementById('bLateral'), bAltura = document.getElementById('bAltura');
   const oLateral = document.getElementById('oLateral'), oAltura = document.getElementById('oAltura');
   const fmt = (v, casas = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 
   // Ponto em volta do qual a câmera gira: s = posição ao longo do talude, d = afastamento da face, z = altura
-  const n = [-u[1], u[0], 0];                                       // horizontal, perpendicular ao talude
-  const Minv = C.Matrix4.inverseTransformation(M, new C.Matrix4());
   const est = { s: 0, d: 0, z: centro[2] };
   const limitar = () => {
     est.s = Math.max(-meioComprimento, Math.min(meioComprimento, est.s));
@@ -349,9 +379,6 @@
   document.getElementById('bCima').onclick = deCima;
   vistaGeral();
 
-  tileset.loadProgress.addEventListener((pend, proc) => { if (pend + proc > 0) estado.textContent = 'Carregando detalhes…'; });
-  tileset.allTilesLoaded.addEventListener(() => { estado.textContent = 'Visualizador: CesiumJS'; });
-
   // Bússola
   const rosa = document.getElementById('rosa');
   scene.postRender.addEventListener(() => {
@@ -421,6 +448,23 @@
     }
     scene.requestRender();
   }, C.ScreenSpaceEventType.LEFT_CLICK);
+
+  // Troca de modelo
+  const seletor = document.getElementById('seletor');
+  const marcarSeletor = () => seletor.querySelectorAll('button').forEach((x) =>
+    x.setAttribute('aria-pressed', String(x.dataset.mva === atual)));
+  marcarSeletor();
+  let trocando = false;
+  seletor.addEventListener('click', async (ev) => {
+    const bt = ev.target.closest('button[data-mva]');
+    if (!bt || trocando || bt.dataset.mva === atual) return;
+    trocando = true;
+    const anterior = atual; atual = bt.dataset.mva; marcarSeletor();
+    bLimpar.onclick();
+    if (await carregar(atual)) { vistaGeral(); history.replaceState(null, '', atual === 'mva1' ? location.pathname : '#' + atual); }
+    else { atual = anterior; marcarSeletor(); }
+    trocando = false;
+  });
 })();
 </script>
 </body>
