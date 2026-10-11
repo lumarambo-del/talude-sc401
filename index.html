@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Talude rodoviário da SC-401</title>
+<meta name="description" content="Modelo 3D do talude rodoviário da SC-401 (km 17+780 a 17+960, Florianópolis/SC), obtido por fotogrametria com drone. TCC em Geologia (UFSC) de Luma Rambo.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.112.0/Build/Cesium/Widgets/widgets.css">
+<style>
+  /* Layout: o modelo ocupa a tela; painel de informações à esquerda, bússola à direita,
+     barras de posição e controles embaixo. */
+  :root {
+    --fundo: #e9ecee;
+    --painel: rgba(255,255,255,.9);
+    --texto: #1f2a30;
+    --texto-2: #55626a;
+    --linha: rgba(31,42,48,.14);
+    --trilho: rgba(31,42,48,.18);
+    --acento: #b8501f;          /* óxido de ferro: medidas e destaques */
+    --acento-texto: #ffffff;
+    --ui: "Archivo", "Segoe UI", system-ui, sans-serif;
+    --dados: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --fundo: #161b1e; --painel: rgba(28,35,39,.9); --texto: #e6ebee; --texto-2: #9aa7ae;
+      --linha: rgba(230,235,238,.14); --trilho: rgba(230,235,238,.22); --acento: #e07a45; --acento-texto: #1a0f09;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --fundo: #161b1e; --painel: rgba(28,35,39,.9); --texto: #e6ebee; --texto-2: #9aa7ae;
+    --linha: rgba(230,235,238,.14); --trilho: rgba(230,235,238,.22); --acento: #e07a45; --acento-texto: #1a0f09;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--fundo); color: var(--texto); font-family: var(--ui); font-size: 14px; overflow: hidden; }
+
+  #vista { position: fixed; inset: 0; }
+  .cesium-viewer, .cesium-viewer-cesiumWidgetContainer, .cesium-widget { width: 100%; height: 100%; position: relative; }
+  .cesium-widget canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+  .cesium-viewer-bottom { left: auto !important; right: 8px; bottom: 4px !important; max-width: 60%; }
+  .cesium-credit-logoContainer { display: none !important; }
+
+  .camada { position: fixed; inset: 0; pointer-events: none; display: flex; flex-direction: column;
+    justify-content: space-between; gap: 12px;
+    padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 24px); }
+  .topo, .base { display: flex; gap: 12px; pointer-events: none; }
+  .topo { justify-content: space-between; align-items: flex-start; }
+  .base { flex-direction: column; align-items: stretch; max-width: 46rem; }
+  .topo > *, .base > * { pointer-events: auto; }
+  .painel { background: var(--painel); border: 1px solid var(--linha); border-radius: 10px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+
+  .info { padding: 14px 16px; max-width: 24rem; min-width: 0; }
+  .info h1 { margin: 0; font-size: 1.15rem; font-weight: 600; letter-spacing: .005em; text-wrap: balance; }
+  .info .local { margin: 4px 0 0; color: var(--texto-2); font-size: .85rem; font-family: var(--dados); }
+  .info .extra { margin-top: 10px; display: grid; gap: 6px; font-size: .83rem; line-height: 1.45; color: var(--texto-2); }
+  .info .extra p { margin: 0; }
+  .info .autoria { color: var(--texto); }
+  .info a { color: var(--acento); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  .info details summary { cursor: pointer; font-size: .8rem; color: var(--texto-2); margin-top: 10px; }
+  .info details[open] summary { margin-bottom: 6px; }
+
+  .bussola { width: 64px; height: 64px; flex: none; display: grid; place-items: center; border-radius: 50%; }
+  .bussola svg { width: 52px; height: 52px; color: var(--texto); }
+  .bussola text { font-family: var(--dados); font-size: 11px; font-weight: 500; fill: var(--texto); }
+
+  .barras { padding: 10px 14px; display: grid; gap: 8px; }
+  .barra { display: grid; grid-template-columns: 6.5rem 1fr 4.6rem; align-items: center; gap: 10px; }
+  .barra label { font-size: .8rem; color: var(--texto-2); }
+  .barra output { font-family: var(--dados); font-size: .8rem; text-align: right; font-variant-numeric: tabular-nums; }
+  .pontas { grid-column: 2; display: flex; justify-content: space-between; font-family: var(--dados);
+    font-size: .7rem; color: var(--texto-2); margin-top: -6px; }
+  input[type="range"] { width: 100%; accent-color: var(--acento); margin: 0; }
+
+  .linha-controles { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .controles { display: flex; flex-wrap: wrap; gap: 4px; padding: 5px; }
+  button { font: 500 .84rem var(--ui); color: var(--texto); background: transparent; border: 1px solid transparent;
+    border-radius: 7px; padding: 7px 11px; cursor: pointer; }
+  button:hover { border-color: var(--linha); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
+  button[aria-pressed="true"] { background: var(--acento); color: var(--acento-texto); }
+
+  .medida { padding: 10px 14px; font-size: .82rem; line-height: 1.5; min-width: 0; }
+  .valores { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; font-family: var(--dados);
+    font-variant-numeric: tabular-nums; color: var(--texto-2); }
+  .valores b { font-weight: 500; color: var(--texto); }
+  .estado { font-family: var(--dados); font-size: .75rem; color: var(--texto-2); padding: 0 4px; }
+  .erro { color: var(--acento); }
+
+  @media (max-width: 560px) {
+    .info .extra { display: none; }
+    .info details:not([open]) ~ .extra { display: none; }
+    .barra { grid-template-columns: 4.8rem 1fr 3.8rem; }
+    .bussola { width: 52px; height: 52px; } .bussola svg { width: 42px; height: 42px; }
+    .cesium-viewer-bottom { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="vista" aria-label="Modelo 3D do talude"></div>
+
+<div class="camada">
+  <div class="topo">
+    <header class="painel info">
+      <h1>Talude rodoviário da SC-401</h1>
+      <p class="local">Modelo 3D · km 17+780 a 17+960 · Florianópolis (SC)</p>
+      <div class="extra">
+        <p>Modelo obtido por fotogrametria com drone, a partir de fotografias de maio de 2026.</p>
+        <p class="autoria">Trabalho de Conclusão de Curso em Geologia (UFSC)<br>Luma Rambo · <a href="mailto:lumarambo@gmail.com">lumarambo@gmail.com</a></p>
+        <p>Arraste com o botão esquerdo para girar, com o botão direito para mover e use a roda do mouse (ou dois dedos) para aproximar. Clique duas vezes num ponto do talude para girar em volta dele. As barras embaixo percorrem o talude com precisão.</p>
+      </div>
+    </header>
+    <div class="painel bussola" title="Norte">
+      <svg id="rosa" viewBox="-30 -30 60 60" aria-hidden="true">
+        <circle r="26" fill="none" stroke="currentColor" stroke-opacity=".25"/>
+        <polygon points="0,-22 5,0 -5,0" fill="var(--acento)"/>
+        <polygon points="0,22 5,0 -5,0" fill="currentColor" fill-opacity=".35"/>
+        <text x="0" y="-25" text-anchor="middle">N</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="base">
+    <div class="medida painel" id="painelMedida" hidden>
+      <div id="textoMedida">Clique em dois pontos do modelo.</div>
+      <div class="valores" id="valores" hidden>
+        <span>distância <b id="vDist">–</b></span>
+        <span>horizontal <b id="vHor">–</b></span>
+        <span>vertical <b id="vVer">–</b></span>
+        <span>direção <b id="vAz">–</b></span>
+      </div>
+    </div>
+
+    <div class="painel barras">
+      <div class="barra">
+        <label for="bLateral">Ao longo do talude</label>
+        <input type="range" id="bLateral" min="0" max="100" step="0.1" value="50">
+        <output id="oLateral" for="bLateral">–</output>
+        <div class="pontas"><span id="pontaEsq">NNE</span><span id="pontaDir">SSW</span></div>
+      </div>
+      <div class="barra">
+        <label for="bAltura">Altura</label>
+        <input type="range" id="bAltura" min="0" max="100" step="0.1" value="50">
+        <output id="oAltura" for="bAltura">–</output>
+        <div class="pontas"><span>pé</span><span>topo</span></div>
+      </div>
+    </div>
+
+    <div class="linha-controles">
+      <nav class="controles painel" aria-label="Vistas e ferramentas">
+        <button id="bGeral" type="button">Vista geral</button>
+        <button id="bFrente" type="button">De frente</button>
+        <button id="bCima" type="button">De cima</button>
+        <button id="bMedir" type="button" aria-pressed="false">Medir distância</button>
+        <button id="bLimpar" type="button" hidden>Limpar medidas</button>
+      </nav>
+      <nav class="controles painel" id="mapas" aria-label="Mapa de fundo" hidden>
+        <button type="button" data-mapa="satelite" aria-pressed="true">Satélite</button>
+        <button type="button" data-mapa="ruas" aria-pressed="false">Ruas</button>
+        <button type="button" data-mapa="nenhum" aria-pressed="false">Sem mapa</button>
+      </nav>
+    </div>
+    <div class="estado" id="estado">Carregando o modelo…</div>
+  </div>
+</div>
+
+<script>window.CESIUM_BASE_URL = "https://cdn.jsdelivr.net/npm/cesium@1.112.0/Build/Cesium/";</script>
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.112.0/Build/Cesium/Cesium.js"></script>
+<script>
+(async function () {
+  const estado = document.getElementById('estado');
+  const falha = (msg) => { estado.textContent = msg; estado.classList.add('erro'); };
+  if (!window.Cesium) { falha('Não foi possível carregar o visualizador. Verifique a conexão com a internet.'); return; }
+  const C = Cesium;
+
+  // Dentro do Claude a página não pode carregar imagens de fora, então fica sem mapa de fundo.
+  const COM_MAPA = !/claude/i.test(location.hostname);
+  const DIRECAO_DA_FACE = 292;              // a face do talude está voltada para WNW
+  const OLHAR_DE_FRENTE = DIRECAO_DA_FACE - 180;
+
+  const tok = getComputedStyle(document.documentElement);
+  const cor = (v) => C.Color.fromCssColorString(tok.getPropertyValue(v).trim() || '#888');
+
+  const camadasDeMapa = {
+    satelite: () => new C.UrlTemplateImageryProvider({
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      maximumLevel: 19, credit: new C.Credit('Imagem de satélite: Esri, Maxar, Earthstar Geographics') }),
+    ruas: () => new C.UrlTemplateImageryProvider({
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maximumLevel: 19,
+      credit: new C.Credit('© colaboradores do OpenStreetMap') })
+  };
+
+  const viewer = new C.Viewer('vista', {
+    globe: COM_MAPA ? undefined : false,
+    baseLayer: COM_MAPA ? new C.ImageryLayer(camadasDeMapa.satelite()) : false,
+    skyBox: COM_MAPA ? undefined : false, skyAtmosphere: COM_MAPA ? undefined : false,
+    baseLayerPicker: false, geocoder: false, homeButton: false, sceneModePicker: false,
+    navigationHelpButton: false, animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false, requestRenderMode: true, maximumRenderTimeChange: Infinity
+  });
+  const scene = viewer.scene;
+  scene.backgroundColor = cor('--fundo');
+  if (scene.sun) scene.sun.show = false;
+  if (scene.moon) scene.moon.show = false;
+  scene.highDynamicRange = false;
+  scene.postProcessStages.fxaa.enabled = true;
+  if (COM_MAPA) { scene.globe.depthTestAgainstTerrain = true; scene.globe.showGroundAtmosphere = false; }
+
+  // Movimento mais calmo (menos "embalo" depois de soltar o mouse)
+  const ctl = scene.screenSpaceCameraController;
+  ctl.inertiaSpin = 0.4; ctl.inertiaTranslate = 0.4; ctl.inertiaZoom = 0.4;
+  ctl.minimumZoomDistance = 1.5; ctl.maximumZoomDistance = 3000;
+
+  let json, tileset;
+  try {
+    json = await (await fetch('tileset.json')).json();
+    tileset = await C.Cesium3DTileset.fromUrl('tileset.json', { maximumScreenSpaceError: 4 });
+  } catch (e) { falha('Não foi possível abrir os arquivos do modelo (tileset.json).'); return; }
+
+  // Sem relevo no mapa, o chão do mapa fica na altitude zero: descemos o modelo até o pé do talude tocar o mapa.
+  const T0 = C.Matrix4.fromArray(json.root.transform);
+  const origemLocal = C.Matrix4.getTranslation(T0, new C.Cartesian3());
+  if (COM_MAPA) {
+    const base = (json.properties && json.properties.Height && json.properties.Height.minimum) || 0;
+    const normal = C.Ellipsoid.WGS84.geodeticSurfaceNormal(origemLocal, new C.Cartesian3());
+    tileset.modelMatrix = C.Matrix4.fromTranslation(C.Cartesian3.multiplyByScalar(normal, -(base - 0.2), new C.Cartesian3()));
+  }
+  scene.primitives.add(tileset);
+  const M = C.Matrix4.multiply(tileset.modelMatrix, T0, new C.Matrix4());
+  const paraMundo = (x, y, z) => C.Matrix4.multiplyByPoint(M, new C.Cartesian3(x, y, z), new C.Cartesian3());
+
+  // Caixa do modelo no sistema local (leste, norte, cima) e eixo ao longo do talude
+  const b = json.root.content.boundingVolume.box;
+  const centro = [b[0], b[1], b[2]], eixos = [[b[3], b[4], b[5]], [b[6], b[7], b[8]], [b[9], b[10], b[11]]];
+  const azDireita = C.Math.toRadians(OLHAR_DE_FRENTE + 90);        // à direita de quem olha a face (SSW)
+  const u = [Math.sin(azDireita), Math.cos(azDireita), 0];
+  const meioComprimento = eixos.reduce((s, a) => s + Math.abs(a[0] * u[0] + a[1] * u[1]), 0);
+  const meiaAltura = eixos.reduce((s, a) => s + Math.abs(a[2]), 0);
+  const zMin = centro[2] - meiaAltura, zMax = centro[2] + meiaAltura;
+  const comprimento = 2 * meioComprimento;
+
+  const bLateral = document.getElementById('bLateral'), bAltura = document.getElementById('bAltura');
+  const oLateral = document.getElementById('oLateral'), oAltura = document.getElementById('oAltura');
+  const fmt = (v, casas = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+
+  // Ponto em volta do qual a câmera gira: s = posição ao longo do talude, d = afastamento da face, z = altura
+  const n = [-u[1], u[0], 0];                                       // horizontal, perpendicular ao talude
+  const Minv = C.Matrix4.inverseTransformation(M, new C.Matrix4());
+  const est = { s: 0, d: 0, z: centro[2] };
+  const limitar = () => {
+    est.s = Math.max(-meioComprimento, Math.min(meioComprimento, est.s));
+    est.z = Math.max(zMin, Math.min(zMax, est.z));
+    est.d = Math.max(-60, Math.min(60, est.d));
+  };
+  function atualizarBarras() {
+    bLateral.value = ((est.s + meioComprimento) / comprimento) * 100;
+    bAltura.value = ((est.z - zMin) / (zMax - zMin)) * 100;
+  }
+  function alvo() {
+    oLateral.textContent = fmt(est.s + meioComprimento) + ' m';
+    oAltura.textContent = fmt(est.z - zMin) + ' m';
+    return paraMundo(centro[0] + est.s * u[0] + est.d * n[0], centro[1] + est.s * u[1] + est.d * n[1], est.z);
+  }
+  function irPara(local) {            // local = ponto no sistema do modelo (leste, norte, cima)
+    const dx = local.x - centro[0], dy = local.y - centro[1];
+    est.s = dx * u[0] + dy * u[1]; est.d = dx * n[0] + dy * n[1]; est.z = local.z;
+    limitar(); atualizarBarras();
+  }
+
+  // A câmera gira sempre em volta de um ponto do talude (o "alvo"), e não do centro da Terra.
+  let hpr = new C.HeadingPitchRange(C.Math.toRadians(OLHAR_DE_FRENTE), C.Math.toRadians(-8), comprimento * 0.9);
+  function mirar(novoHpr) {
+    if (novoHpr) hpr = novoHpr;
+    viewer.camera.lookAtTransform(C.Transforms.eastNorthUpToFixedFrame(alvo()), hpr);
+    scene.requestRender();
+  }
+  function lerCamera() {
+    const pos = viewer.camera.position;              // no referencial do alvo
+    const r = C.Cartesian3.magnitude(pos);
+    if (r > 0) hpr = new C.HeadingPitchRange(viewer.camera.heading, viewer.camera.pitch, r);
+  }
+  scene.camera.moveEnd.addEventListener(lerCamera);
+  bLateral.addEventListener('input', () => { lerCamera(); est.s = (bLateral.value / 100) * comprimento - meioComprimento; mirar(); });
+  bAltura.addEventListener('input', () => { lerCamera(); est.z = zMin + (bAltura.value / 100) * (zMax - zMin); mirar(); });
+
+  // Botão direito do mouse: arrasta o ponto de vista livremente (as barras acompanham)
+  ctl.zoomEventTypes = [C.CameraEventType.WHEEL, C.CameraEventType.PINCH];
+  scene.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  const mouse = new C.ScreenSpaceEventHandler(scene.canvas);
+  let arrasto = null;
+  mouse.setInputAction((e) => { lerCamera(); arrasto = C.Cartesian2.clone(e.position); }, C.ScreenSpaceEventType.RIGHT_DOWN);
+  mouse.setInputAction(() => { arrasto = null; }, C.ScreenSpaceEventType.RIGHT_UP);
+  mouse.setInputAction((mov) => {
+    if (!arrasto) return;
+    const dx = mov.endPosition.x - arrasto.x, dy = mov.endPosition.y - arrasto.y;
+    arrasto = C.Cartesian2.clone(mov.endPosition);
+    const fovy = viewer.camera.frustum.fovy || C.Math.toRadians(60);
+    const mpp = (2 * hpr.range * Math.tan(fovy / 2)) / Math.max(scene.canvas.clientHeight, 1);
+    const desl = C.Cartesian3.add(
+      C.Cartesian3.multiplyByScalar(viewer.camera.rightWC, -dx * mpp, new C.Cartesian3()),
+      C.Cartesian3.multiplyByScalar(viewer.camera.upWC, dy * mpp, new C.Cartesian3()), new C.Cartesian3());
+    const loc = C.Matrix4.multiplyByPointAsVector(Minv, desl, new C.Cartesian3());
+    est.s += loc.x * u[0] + loc.y * u[1]; est.d += loc.x * n[0] + loc.y * n[1]; est.z += loc.z;
+    limitar(); atualizarBarras(); mirar();
+  }, C.ScreenSpaceEventType.MOUSE_MOVE);
+
+  // Clique duplo num ponto do talude: a câmera passa a girar em volta dele
+  viewer.screenSpaceEventHandler.removeInputAction(C.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+  mouse.setInputAction((e) => {
+    const p = scene.pickPositionSupported ? scene.pickPosition(e.position) : undefined;
+    if (!C.defined(p)) return;
+    lerCamera();
+    irPara(C.Matrix4.multiplyByPoint(Minv, p, new C.Cartesian3()));
+    mirar();
+  }, C.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+  const vistaGeral = () => { est.s = 0; est.d = 0; est.z = centro[2]; atualizarBarras();
+    mirar(new C.HeadingPitchRange(C.Math.toRadians(OLHAR_DE_FRENTE), C.Math.toRadians(-12), comprimento * 0.95)); };
+  const deFrente = () => mirar(new C.HeadingPitchRange(C.Math.toRadians(OLHAR_DE_FRENTE), C.Math.toRadians(-5), 25));
+  const deCima = () => mirar(new C.HeadingPitchRange(C.Math.toRadians(OLHAR_DE_FRENTE), C.Math.toRadians(-89.5), comprimento * 0.9));
+  document.getElementById('bGeral').onclick = vistaGeral;
+  document.getElementById('bFrente').onclick = deFrente;
+  document.getElementById('bCima').onclick = deCima;
+  vistaGeral();
+
+  tileset.loadProgress.addEventListener((pend, proc) => { if (pend + proc > 0) estado.textContent = 'Carregando detalhes…'; });
+  tileset.allTilesLoaded.addEventListener(() => { estado.textContent = 'Visualizador: CesiumJS'; });
+
+  // Bússola
+  const rosa = document.getElementById('rosa');
+  scene.postRender.addEventListener(() => {
+    rosa.style.transform = `rotate(${-C.Math.toDegrees(viewer.camera.heading)}deg)`;
+  });
+
+  // Mapa de fundo
+  if (COM_MAPA) {
+    const mapas = document.getElementById('mapas');
+    mapas.hidden = false;
+    mapas.addEventListener('click', (ev) => {
+      const bt = ev.target.closest('button[data-mapa]'); if (!bt) return;
+      mapas.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === bt)));
+      const camadas = viewer.imageryLayers; camadas.removeAll();
+      const tipo = bt.dataset.mapa;
+      scene.globe.show = tipo !== 'nenhum';
+      if (tipo !== 'nenhum') camadas.addImageryProvider(camadasDeMapa[tipo]());
+      scene.requestRender();
+    });
+  }
+
+  // Medida de distância entre dois pontos
+  const bMedir = document.getElementById('bMedir'), bLimpar = document.getElementById('bLimpar');
+  const painel = document.getElementById('painelMedida'), texto = document.getElementById('textoMedida');
+  const valores = document.getElementById('valores');
+  const corMedida = cor('--acento');
+  const metros = (v) => fmt(v, 2) + ' m';
+  let medindo = false, primeiro = null;
+  const marcas = [];
+  bMedir.onclick = () => {
+    medindo = !medindo; primeiro = null;
+    bMedir.setAttribute('aria-pressed', String(medindo));
+    painel.hidden = !medindo && marcas.length === 0;
+    if (medindo) texto.textContent = 'Clique em dois pontos do modelo.';
+  };
+  bLimpar.onclick = () => {
+    marcas.forEach((m) => viewer.entities.remove(m)); marcas.length = 0; primeiro = null;
+    bLimpar.hidden = true; valores.hidden = true; painel.hidden = !medindo;
+    texto.textContent = 'Clique em dois pontos do modelo.'; scene.requestRender();
+  };
+  const ponto = (p) => viewer.entities.add({ position: p, point: { pixelSize: 9, color: corMedida,
+    outlineColor: C.Color.WHITE, outlineWidth: 2, disableDepthTestDistance: Number.POSITIVE_INFINITY } });
+  new C.ScreenSpaceEventHandler(scene.canvas).setInputAction((ev) => {
+    if (!medindo) return;
+    const p = scene.pickPositionSupported ? scene.pickPosition(ev.position) : undefined;
+    if (!C.defined(p)) { texto.textContent = 'Clique sobre o modelo, não no fundo.'; return; }
+    marcas.push(ponto(p));
+    if (!primeiro) { primeiro = p; texto.textContent = 'Agora clique no segundo ponto.'; }
+    else {
+      const a = primeiro; primeiro = null;
+      marcas.push(viewer.entities.add({ polyline: { positions: [a, p], width: 3, material: corMedida,
+        depthFailMaterial: new C.PolylineDashMaterialProperty({ color: corMedida }) } }));
+      const inv = C.Matrix4.inverseTransformation(C.Transforms.eastNorthUpToFixedFrame(a), new C.Matrix4());
+      const d = C.Matrix4.multiplyByPoint(inv, p, new C.Cartesian3());
+      const hor = Math.hypot(d.x, d.y), ver = d.z, dist = Math.hypot(hor, ver);
+      const az = (C.Math.toDegrees(Math.atan2(d.x, d.y)) + 360) % 360;
+      marcas.push(viewer.entities.add({ position: C.Cartesian3.midpoint(a, p, new C.Cartesian3()), label: {
+        text: metros(dist), font: '500 14px "IBM Plex Mono", monospace', fillColor: C.Color.WHITE,
+        showBackground: true, backgroundColor: corMedida.withAlpha(0.9), pixelOffset: new C.Cartesian2(0, -16),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY } }));
+      document.getElementById('vDist').textContent = metros(dist);
+      document.getElementById('vHor').textContent = metros(hor);
+      document.getElementById('vVer').textContent = (ver >= 0 ? '+' : '') + metros(ver);
+      document.getElementById('vAz').textContent = String(Math.round(az)).padStart(3, '0') + '°';
+      texto.textContent = 'Medida pronta. Clique em mais dois pontos para outra.';
+      valores.hidden = false; bLimpar.hidden = false;
+    }
+    scene.requestRender();
+  }, C.ScreenSpaceEventType.LEFT_CLICK);
+})();
+</script>
+</body>
+</html>
