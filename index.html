@@ -64,7 +64,6 @@
   .seletor { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 12px; padding: 3px;
     border: 1px solid var(--linha); border-radius: 9px; }
   .seletor button { font: 500 .85rem var(--dados); letter-spacing: .06em; padding: 7px 10px; text-align: center; }
-  .info .nota { margin: 8px 0 0; font-size: .83rem; line-height: 1.45; color: var(--texto-2); min-height: 2.4em; }
   .info details summary { cursor: pointer; font-size: .8rem; color: var(--texto-2); margin-top: 10px; }
   .info details[open] summary { margin-bottom: 6px; }
 
@@ -116,7 +115,6 @@
         <button type="button" data-mva="mva1" aria-pressed="true">MVA 1</button>
         <button type="button" data-mva="mva2" aria-pressed="false">MVA 2</button>
       </div>
-      <p class="nota" id="nota">Levantamento aéreo com drone.</p>
       <div class="extra">
         <p class="autoria">Trabalho de Conclusão de Curso em Geologia (UFSC)<br>Luma Rambo · <a href="mailto:lumarambo@gmail.com">lumarambo@gmail.com</a></p>
         <p>Arraste com o botão esquerdo para girar e com a rodinha (ou o botão direito) apertada para mover. Gire a rodinha (ou use dois dedos) para aproximar. Clique duas vezes num ponto do talude para girar em volta dele. As barras embaixo percorrem o talude com precisão.</p>
@@ -238,11 +236,11 @@
   ctl.inertiaSpin = 0.4; ctl.inertiaTranslate = 0.4; ctl.inertiaZoom = 0.4;
   ctl.minimumZoomDistance = 1.5; ctl.maximumZoomDistance = 3000;
 
-  // Modelos disponíveis. Para acrescentar outro, crie uma pasta (mva3/...) e adicione uma linha aqui
+  // Modelos disponíveis. Para acrescentar outro, envie os arquivos dele com um prefixo próprio, adicione uma linha aqui
   // e um botão no seletor do cabeçalho.
   const MODELOS = {
-    mva1: { url: 'tileset.json', nota: 'Levantamento aéreo com drone.' },
-    mva2: { url: 'mva2/tileset.json', nota: 'Levantamento aéreo com drone integrado a fotografias terrestres de celular.' }
+    mva1: { url: 'mva1.json' },
+    mva2: { url: 'mva2.json' }
   };
   const azDireita = C.Math.toRadians(OLHAR_DE_FRENTE + 90);        // à direita de quem olha a face (SSW)
   const u = [Math.sin(azDireita), Math.cos(azDireita), 0];          // eixo ao longo do talude
@@ -284,7 +282,6 @@
 
     tileset.loadProgress.addEventListener((pend, proc) => { if (pend + proc > 0) estado.textContent = 'Carregando detalhes…'; });
     tileset.allTilesLoaded.addEventListener(() => { estado.textContent = 'Visualizador: CesiumJS'; });
-    document.getElementById('nota').textContent = cfg.nota;
     return true;
   }
   let atual = location.hash === '#mva2' ? 'mva2' : 'mva1';
